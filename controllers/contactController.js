@@ -2,7 +2,7 @@ import Contact from '../models/Contact.js';
 import nodemailer from 'nodemailer';
 
 /**
- * Email Service Configuration
+ * Email Service Configuration - Brevo (Sendinblue) SMTP
  */
 class EmailService {
   constructor() {
@@ -12,35 +12,48 @@ class EmailService {
   }
 
   initializeTransporter() {
-    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-      this.transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS
-        },
-        pool: true,
-        maxConnections: 5,
-        maxMessages: 100
+    const smtpConfig = {
+      host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
+      port: process.env.SMTP_PORT || 587,
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      },
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100
+    };
+
+    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+      this.transporter = nodemailer.createTransport(smtpConfig);
+      
+      // Verify connection
+      this.transporter.verify((error) => {
+        if (error) {
+          console.error('❌ Brevo SMTP connection failed:', error);
+          this.isConfigured = false;
+        } else {
+          this.isConfigured = true;
+          console.log('📧 Brevo email service configured successfully');
+        }
       });
-      this.isConfigured = true;
-      console.log(' Email service configured successfully');
     } else {
-      console.warn(' Email credentials not configured - email notifications disabled');
+      console.warn('⚠️ Brevo SMTP credentials not configured - email notifications disabled');
     }
   }
 
   async sendEmail(mailOptions) {
     if (!this.isConfigured) {
-      throw new Error('Email service not configured');
+      throw new Error('Brevo email service not configured');
     }
 
     try {
       const result = await this.transporter.sendMail(mailOptions);
-      console.log(` Email sent to ${mailOptions.to}`);
+      console.log(`✅ Email sent successfully to ${mailOptions.to}`);
       return result;
     } catch (error) {
-      console.error(' Email sending failed:', error);
+      console.error('❌ Brevo email sending failed:', error);
       throw error;
     }
   }
@@ -94,7 +107,7 @@ const EmailTemplates = {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Thank You for Contacting Moon</title>
+        <title>Thank You for Contacting Manish</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: 0; padding: 20px; }
@@ -170,7 +183,7 @@ const EmailTemplates = {
   }),
 
   adminNotification: (name, email, subject, message, contactId) => ({
-    subject: ` New Portfolio Contact: ${subject}`,
+    subject: `📧 New Portfolio Contact: ${subject}`,
     html: `
       <!DOCTYPE html>
       <html lang="en">
@@ -200,7 +213,7 @@ const EmailTemplates = {
       <body>
         <div class="container">
           <div class="header">
-            <h1> New Contact Submission</h1>
+            <h1>📩 New Contact Submission</h1>
             <p>Someone reached out through your portfolio</p>
             <div class="alert-badge">Action Required</div>
           </div>
@@ -208,12 +221,12 @@ const EmailTemplates = {
           <div class="content">
             <div class="info-grid">
               <div class="info-card">
-                <strong> Contact Info</strong>
+                <strong>👤 Contact Info</strong>
                 <p style="margin-top: 10px;"><strong>Name:</strong> ${name}</p>
                 <p><strong>Email:</strong> <a href="mailto:${email}" style="color: #667eea;">${email}</a></p>
               </div>
               <div class="info-card">
-                <strong> Details</strong>
+                <strong>📋 Details</strong>
                 <p style="margin-top: 10px;"><strong>Subject:</strong> ${subject}</p>
                 <p><strong>Contact ID:</strong> ${contactId}</p>
                 <p><strong>Received:</strong> ${new Date().toLocaleString()}</p>
@@ -221,26 +234,26 @@ const EmailTemplates = {
             </div>
 
             <div class="message-card">
-              <strong> Message Content</strong>
+              <strong>💬 Message Content</strong>
               <div style="margin-top: 15px; background: white; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0;">
                 ${message.replace(/\n/g, '<br>')}
               </div>
             </div>
 
             <div class="action-buttons">
-              <a href="mailto:${email}?subject=Re: ${subject}" class="btn btn-primary">Reply via Email</a>
-              <a href="#" class="btn btn-secondary"> Mark as Read</a>
+              <a href="mailto:${email}?subject=Re: ${subject}" class="btn btn-primary">📧 Reply via Email</a>
+              <a href="#" class="btn btn-secondary">👁️ Mark as Read</a>
             </div>
 
             <div style="background: #f0fff4; padding: 15px; border-radius: 8px; border-left: 4px solid #48bb78;">
-              <strong> Quick Stats</strong>
+              <strong>📊 Quick Stats</strong>
               <p style="margin-top: 8px; font-size: 0.9rem;">This is contact #42 this month • Average response time: 4.2 hours</p>
             </div>
           </div>
           
           <div class="footer">
             <p>This notification was automatically generated by your portfolio contact system</p>
-            <p style="margin-top: 8px;">Manish Portfolio •  ${new Date().toLocaleString()}</p>
+            <p style="margin-top: 8px;">Manish Portfolio • ${new Date().toLocaleString()}</p>
           </div>
         </div>
       </body>
@@ -274,7 +287,7 @@ export class ContactController {
       const { name, email, subject, message, source = 'website' } = req.body;
 
       // Enhanced logging with context
-      console.log(` Contact form submission received:`, {
+      console.log(`📧 Contact form submission received:`, {
         name,
         email,
         subject: subject.substring(0, 50) + (subject.length > 50 ? '...' : ''),
@@ -282,6 +295,11 @@ export class ContactController {
         ip: req.ip,
         userAgent: req.get('User-Agent')?.substring(0, 100)
       });
+
+      // Validation
+      if (!name || !email || !subject || !message) {
+        return ResponseUtil.validationError(res, 'All fields are required: name, email, subject, message');
+      }
 
       // Create contact with additional metadata
       const contactData = {
@@ -302,7 +320,7 @@ export class ContactController {
       const contact = new Contact(contactData);
       await contact.save();
 
-      console.log(` Contact saved successfully:`, {
+      console.log(`✅ Contact saved successfully:`, {
         id: contact._id,
         name: contact.name,
         duration: `${Date.now() - startTime}ms`
@@ -311,8 +329,10 @@ export class ContactController {
       // Send email notifications asynchronously (don't block response)
       if (emailService.isConfigured) {
         this.sendEmailNotifications(contact).catch(error => {
-          console.error('Background email sending failed:', error);
+          console.error('❌ Background email sending failed:', error);
         });
+      } else {
+        console.warn('⚠️ Email service not configured - skipping email notifications');
       }
 
       return ResponseUtil.success(
@@ -329,7 +349,7 @@ export class ContactController {
       );
 
     } catch (error) {
-      console.error(' Contact submission error:', {
+      console.error('❌ Contact submission error:', {
         error: error.message,
         stack: error.stack,
         duration: `${Date.now() - startTime}ms`
@@ -376,22 +396,29 @@ export class ContactController {
         contact._id
       );
 
+      // Use environment variables for email addresses
+      const adminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_USER;
+      
+      if (!adminEmail) {
+        throw new Error('Admin email not configured');
+      }
+
       await Promise.all([
         emailService.sendEmail({
-          from: `"Manish Portfolio" <${process.env.EMAIL_USER}>`,
+          from: `"Manish Portfolio" <${process.env.FROM_EMAIL || process.env.SMTP_USER}>`,
           to: contact.email,
           ...userTemplate
         }),
         emailService.sendEmail({
-          from: `"Portfolio Contact System" <${process.env.EMAIL_USER}>`,
-          to: process.env.EMAIL_USER,
+          from: `"Portfolio Contact System" <${process.env.FROM_EMAIL || process.env.SMTP_USER}>`,
+          to: adminEmail,
           ...adminTemplate
         })
       ]);
 
-      console.log(` Email notifications sent for contact: ${contact._id}`);
+      console.log(`✅ Brevo email notifications sent for contact: ${contact._id}`);
     } catch (emailError) {
-      console.error(' Email notification failed:', emailError);
+      console.error('❌ Brevo email notification failed:', emailError);
       // Don't throw - this shouldn't affect the main request
     }
   }
@@ -464,7 +491,7 @@ export class ContactController {
       });
 
     } catch (error) {
-      console.error(' Get contacts error:', error);
+      console.error('❌ Get contacts error:', error);
       return ResponseUtil.error(res, 'Failed to fetch contacts', error, 500);
     }
   };
@@ -545,7 +572,7 @@ export class ContactController {
       });
 
     } catch (error) {
-      console.error('Get contact stats error:', error);
+      console.error('❌ Get contact stats error:', error);
       return ResponseUtil.error(res, 'Failed to fetch contact statistics', error, 500);
     }
   };
@@ -561,7 +588,7 @@ export class ContactController {
 
       return ResponseUtil.success(res, 'Contact retrieved successfully', contact);
     } catch (error) {
-      console.error('Get contact by ID error:', error);
+      console.error('❌ Get contact by ID error:', error);
       if (error.name === 'CastError') {
         return ResponseUtil.error(res, 'Invalid contact ID format', error, 400);
       }
@@ -602,7 +629,7 @@ export class ContactController {
 
       return ResponseUtil.success(res, 'Contact status updated successfully', contact);
     } catch (error) {
-      console.error(' Update contact status error:', error);
+      console.error('❌ Update contact status error:', error);
       if (error.name === 'CastError') {
         return ResponseUtil.error(res, 'Invalid contact ID format', error, 400);
       }
@@ -621,7 +648,7 @@ export class ContactController {
 
       return ResponseUtil.success(res, 'Contact message deleted successfully');
     } catch (error) {
-      console.error(' Delete contact error:', error);
+      console.error('❌ Delete contact error:', error);
       if (error.name === 'CastError') {
         return ResponseUtil.error(res, 'Invalid contact ID format', error, 400);
       }
@@ -639,6 +666,7 @@ export class ContactController {
         timestamp: new Date().toISOString(),
         database: 'connected',
         emailService: emailService.isConfigured ? 'configured' : 'not configured',
+        emailProvider: 'Brevo SMTP',
         uptime: `${process.uptime().toFixed(2)}s`,
         memory: {
           used: `${(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)} MB`,
@@ -648,7 +676,7 @@ export class ContactController {
 
       return ResponseUtil.success(res, 'Contact service is healthy', healthInfo);
     } catch (error) {
-      console.error(' Health check failed:', error);
+      console.error('❌ Health check failed:', error);
       return ResponseUtil.error(res, 'Contact service is unhealthy', error, 503);
     }
   };
