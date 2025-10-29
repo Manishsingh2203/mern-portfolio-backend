@@ -1,61 +1,71 @@
 import Contact from '../models/Contact.js';
-import nodemailer from 'nodemailer';
 
 /**
- * Email Service Configuration - Brevo (Sendinblue) SMTP
+ * Email Service using Brevo Transactional API
  */
 class EmailService {
   constructor() {
-    this.transporter = null;
-    this.isConfigured = false;
-    this.initializeTransporter();
-  }
-
-  initializeTransporter() {
-    const smtpConfig = {
-      host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
-      port: process.env.SMTP_PORT || 587,
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      },
-      pool: true,
-      maxConnections: 5,
-      maxMessages: 100,
-      tls: { rejectUnauthorized: false }
-    };
-
-    // Create transporter
-    this.transporter = nodemailer.createTransport(smtpConfig);
-
-    // Verify connection
-    this.transporter.verify((error, success) => {
-      if (error) {
-        console.error("❌ SMTP connection failed:", error);
-      } else {
-        this.isConfigured = true;
-        console.log("✅ SMTP server is ready to take messages via TLS");
-      }
-    });
+    this.apiKey = process.env.BREVO_API_KEY;
+    this.isConfigured = !!this.apiKey;
+    this.baseUrl = 'https://api.brevo.com/v3';
+    
+    if (this.isConfigured) {
+      console.log('✅ Brevo API service configured successfully');
+    } else {
+      console.warn('⚠️ Brevo API key not configured - email notifications disabled');
+    }
   }
 
   async sendEmail(mailOptions) {
     if (!this.isConfigured) {
-      throw new Error('Brevo email service not configured');
+      throw new Error('Brevo API service not configured');
     }
 
     try {
-      const result = await this.transporter.sendMail(mailOptions);
-      console.log(`✅ Email sent successfully to ${mailOptions.to}`);
+      const emailData = {
+        sender: {
+          name: mailOptions.from?.name || process.env.PORTFOLIO_NAME || 'Manish Portfolio',
+          email: process.env.FROM_EMAIL
+        },
+        to: [
+          {
+            email: mailOptions.to,
+            name: mailOptions.toName || ''
+          }
+        ],
+        subject: mailOptions.subject,
+        htmlContent: mailOptions.html,
+        replyTo: {
+          email: process.env.FROM_EMAIL,
+          name: process.env.PORTFOLIO_NAME || 'Manish Portfolio'
+        }
+      };
+
+      const response = await fetch(`${this.baseUrl}/smtp/email`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'api-key': this.apiKey
+        },
+        body: JSON.stringify(emailData)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || `Brevo API error: ${response.status}`);
+      }
+
+      console.log(`✅ Brevo API email sent successfully to ${mailOptions.to}`);
+      console.log(`📧 Message ID: ${result.messageId}`);
       return result;
     } catch (error) {
-      console.error('❌ Brevo email sending failed:', error);
+      console.error('❌ Brevo API email sending failed:', error.message);
       throw error;
     }
   }
 }
-
 
 const emailService = new EmailService();
 
@@ -94,7 +104,7 @@ const ResponseUtil = {
 };
 
 /**
- * Contact Form Templates
+ * Contact Form Templates (Same as before)
  */
 const EmailTemplates = {
   userConfirmation: (name, email, subject, message) => ({
@@ -219,12 +229,12 @@ const EmailTemplates = {
           <div class="content">
             <div class="info-grid">
               <div class="info-card">
-                <strong>Contact Info</strong>
+                <strong>👤 Contact Info</strong>
                 <p style="margin-top: 10px;"><strong>Name:</strong> ${name}</p>
                 <p><strong>Email:</strong> <a href="mailto:${email}" style="color: #667eea;">${email}</a></p>
               </div>
               <div class="info-card">
-                <strong>Details</strong>
+                <strong>📋 Details</strong>
                 <p style="margin-top: 10px;"><strong>Subject:</strong> ${subject}</p>
                 <p><strong>Contact ID:</strong> ${contactId}</p>
                 <p><strong>Received:</strong> ${new Date().toLocaleString()}</p>
@@ -232,19 +242,19 @@ const EmailTemplates = {
             </div>
 
             <div class="message-card">
-              <strong>Message Content</strong>
+              <strong>💬 Message Content</strong>
               <div style="margin-top: 15px; background: white; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0;">
                 ${message.replace(/\n/g, '<br>')}
               </div>
             </div>
 
             <div class="action-buttons">
-              <a href="mailto:${email}?subject=Re: ${subject}" class="btn btn-primary">Reply via Email</a>
-              <a href="#" class="btn btn-secondary"> Mark as Read</a>
+              <a href="mailto:${email}?subject=Re: ${subject}" class="btn btn-primary">📧 Reply via Email</a>
+              <a href="#" class="btn btn-secondary">👁️ Mark as Read</a>
             </div>
 
             <div style="background: #f0fff4; padding: 15px; border-radius: 8px; border-left: 4px solid #48bb78;">
-              <strong>Quick Stats</strong>
+              <strong>📊 Quick Stats</strong>
               <p style="margin-top: 8px; font-size: 0.9rem;">This is contact #42 this month • Average response time: 4.2 hours</p>
             </div>
           </div>
@@ -261,7 +271,7 @@ const EmailTemplates = {
 };
 
 /**
- * Contact Controller - Enhanced with Professional Features
+ * Contact Controller - Updated for Brevo API
  */
 export class ContactController {
   /**
@@ -330,7 +340,7 @@ export class ContactController {
           console.error('❌ Background email sending failed:', error);
         });
       } else {
-        console.warn('⚠️ Email service not configured - skipping email notifications');
+        console.warn('⚠️ Brevo email service not configured - skipping email notifications');
       }
 
       return ResponseUtil.success(
@@ -394,264 +404,47 @@ export class ContactController {
         contact._id
       );
 
-      // Use environment variables for email addresses
-      const adminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_USER;
-      
-      if (!adminEmail) {
-        throw new Error('Admin email not configured');
-      }
-
       await Promise.all([
         emailService.sendEmail({
-          from: `"Manish Portfolio" <${process.env.FROM_EMAIL || process.env.SMTP_USER}>`,
+          from: { name: process.env.PORTFOLIO_NAME || 'Manish Portfolio' },
           to: contact.email,
+          toName: contact.name,
           ...userTemplate
         }),
         emailService.sendEmail({
-          from: `"Portfolio Contact System" <${process.env.FROM_EMAIL || process.env.SMTP_USER}>`,
-          to: adminEmail,
+          from: { name: 'Portfolio Contact System' },
+          to: process.env.ADMIN_EMAIL,
+          toName: 'Manish',
           ...adminTemplate
         })
       ]);
 
-      console.log(`✅ Brevo email notifications sent for contact: ${contact._id}`);
+      console.log(`✅ Brevo API email notifications sent for contact: ${contact._id}`);
     } catch (emailError) {
-      console.error('❌ Brevo email notification failed:', emailError);
+      console.error('❌ Brevo API email notification failed:', emailError);
       // Don't throw - this shouldn't affect the main request
     }
   }
 
-  /**
-   * Get contacts with advanced filtering and analytics
-   */
+  // ... [Keep all your other methods exactly the same - getContacts, getContactStats, etc.]
   static getContacts = async (req, res) => {
-    try {
-      const {
-        page = 1,
-        limit = 10,
-        status,
-        search,
-        priority,
-        source,
-        sortBy = 'createdAt',
-        sortOrder = 'desc'
-      } = req.query;
-
-      // Build advanced query
-      const query = {};
-      
-      if (status && status !== 'all') query.status = status;
-      if (priority) query.priority = priority;
-      if (source) query.source = source;
-      
-      if (search) {
-        query.$or = [
-          { name: { $regex: search, $options: 'i' } },
-          { email: { $regex: search, $options: 'i' } },
-          { subject: { $regex: search, $options: 'i' } },
-          { message: { $regex: search, $options: 'i' } },
-          { tags: { $in: [new RegExp(search, 'i')] } }
-        ];
-      }
-
-      // Sort configuration
-      const sortConfig = {};
-      sortConfig[sortBy] = sortOrder === 'desc' ? -1 : 1;
-
-      const [contacts, total, urgentCount, newCount] = await Promise.all([
-        Contact.find(query)
-          .sort(sortConfig)
-          .limit(parseInt(limit))
-          .skip((parseInt(page) - 1) * parseInt(limit))
-          .select('-__v')
-          .lean(),
-
-        Contact.countDocuments(query),
-        Contact.countDocuments({ ...query, priority: 'urgent' }),
-        Contact.countDocuments({ ...query, status: 'new' })
-      ]);
-
-      return ResponseUtil.success(res, 'Contacts retrieved successfully', {
-        contacts,
-        pagination: {
-          current: parseInt(page),
-          pages: Math.ceil(total / limit),
-          total,
-          limit: parseInt(limit),
-          hasNext: parseInt(page) < Math.ceil(total / limit),
-          hasPrev: parseInt(page) > 1
-        },
-        analytics: {
-          urgent: urgentCount,
-          new: newCount,
-          total
-        }
-      });
-
-    } catch (error) {
-      console.error('❌ Get contacts error:', error);
-      return ResponseUtil.error(res, 'Failed to fetch contacts', error, 500);
-    }
+    // ... existing code
   };
 
-  /**
-   * Get comprehensive contact statistics
-   */
   static getContactStats = async (req, res) => {
-    try {
-      const stats = await Contact.aggregate([
-        {
-          $facet: {
-            statusStats: [
-              { $group: { _id: '$status', count: { $sum: 1 } } }
-            ],
-            priorityStats: [
-              { $group: { _id: '$priority', count: { $sum: 1 } } }
-            ],
-            sourceStats: [
-              { $group: { _id: '$source', count: { $sum: 1 } } }
-            ],
-            dailyStats: [
-              {
-                $group: {
-                  _id: {
-                    $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
-                  },
-                  count: { $sum: 1 }
-                }
-              },
-              { $sort: { _id: -1 } },
-              { $limit: 30 }
-            ],
-            responseTimeStats: [
-              {
-                $match: { status: 'replied', 'response.repliedAt': { $exists: true } }
-              },
-              {
-                $project: {
-                  responseTime: {
-                    $divide: [
-                      { $subtract: ['$response.repliedAt', '$createdAt'] },
-                      1000 * 60 * 60 // Convert to hours
-                    ]
-                  }
-                }
-              },
-              {
-                $group: {
-                  _id: null,
-                  avgResponseTime: { $avg: '$responseTime' },
-                  minResponseTime: { $min: '$responseTime' },
-                  maxResponseTime: { $max: '$responseTime' }
-                }
-              }
-            ]
-          }
-        }
-      ]);
-
-      const result = stats[0] || {
-        statusStats: [],
-        priorityStats: [],
-        sourceStats: [],
-        dailyStats: [],
-        responseTimeStats: []
-      };
-
-      return ResponseUtil.success(res, 'Statistics retrieved successfully', {
-        overview: result,
-        summary: {
-          totalContacts: result.statusStats.reduce((sum, stat) => sum + stat.count, 0),
-          averageResponseTime: result.responseTimeStats[0]?.avgResponseTime?.toFixed(1) || 'N/A',
-          mostActiveSource: result.sourceStats.reduce((max, stat) => 
-            stat.count > (max?.count || 0) ? stat : max, null
-          )?._id || 'N/A'
-        }
-      });
-
-    } catch (error) {
-      console.error('❌ Get contact stats error:', error);
-      return ResponseUtil.error(res, 'Failed to fetch contact statistics', error, 500);
-    }
+    // ... existing code
   };
 
   static getContactById = async (req, res) => {
-    try {
-      const { id } = req.params;
-      const contact = await Contact.findById(id);
-
-      if (!contact) {
-        return ResponseUtil.error(res, 'Contact message not found', null, 404);
-      }
-
-      return ResponseUtil.success(res, 'Contact retrieved successfully', contact);
-    } catch (error) {
-      console.error('❌ Get contact by ID error:', error);
-      if (error.name === 'CastError') {
-        return ResponseUtil.error(res, 'Invalid contact ID format', error, 400);
-      }
-      return ResponseUtil.error(res, 'Failed to fetch contact', error, 500);
-    }
+    // ... existing code
   };
 
   static updateContactStatus = async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { status, responseMessage, repliedBy = 'System' } = req.body;
-
-      const validStatuses = ['new', 'read', 'replied', 'archived'];
-      if (!validStatuses.includes(status)) {
-        return ResponseUtil.error(res, `Invalid status. Must be one of: ${validStatuses.join(', ')}`, null, 400);
-      }
-
-      const updateData = { status };
-      
-      // If marking as replied, add response details
-      if (status === 'replied') {
-        updateData.response = {
-          repliedAt: new Date(),
-          repliedBy,
-          responseMessage: responseMessage || 'Thank you for your message!'
-        };
-      }
-
-      const contact = await Contact.findByIdAndUpdate(
-        id,
-        updateData,
-        { new: true, runValidators: true }
-      );
-
-      if (!contact) {
-        return ResponseUtil.error(res, 'Contact message not found', null, 404);
-      }
-
-      return ResponseUtil.success(res, 'Contact status updated successfully', contact);
-    } catch (error) {
-      console.error('❌ Update contact status error:', error);
-      if (error.name === 'CastError') {
-        return ResponseUtil.error(res, 'Invalid contact ID format', error, 400);
-      }
-      return ResponseUtil.error(res, 'Failed to update contact status', error, 500);
-    }
+    // ... existing code
   };
 
   static deleteContact = async (req, res) => {
-    try {
-      const { id } = req.params;
-      const contact = await Contact.findByIdAndDelete(id);
-
-      if (!contact) {
-        return ResponseUtil.error(res, 'Contact message not found', null, 404);
-      }
-
-      return ResponseUtil.success(res, 'Contact message deleted successfully');
-    } catch (error) {
-      console.error('❌ Delete contact error:', error);
-      if (error.name === 'CastError') {
-        return ResponseUtil.error(res, 'Invalid contact ID format', error, 400);
-      }
-      return ResponseUtil.error(res, 'Failed to delete contact', error, 500);
-    }
+    // ... existing code
   };
 
   static healthCheck = async (req, res) => {
@@ -664,7 +457,7 @@ export class ContactController {
         timestamp: new Date().toISOString(),
         database: 'connected',
         emailService: emailService.isConfigured ? 'configured' : 'not configured',
-        emailProvider: 'Brevo SMTP',
+        emailProvider: 'Brevo API',
         uptime: `${process.uptime().toFixed(2)}s`,
         memory: {
           used: `${(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)} MB`,
