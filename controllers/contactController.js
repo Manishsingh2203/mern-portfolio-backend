@@ -35,7 +35,7 @@ class EmailService {
           this.isConfigured = false;
         } else {
           this.isConfigured = true;
-          console.log('📧 Brevo email service configured successfully');
+          console.log(' ✅ Brevo email service configured successfully');
         }
       });
     } else {
@@ -221,12 +221,12 @@ const EmailTemplates = {
           <div class="content">
             <div class="info-grid">
               <div class="info-card">
-                <strong>👤 Contact Info</strong>
+                <strong>Contact Info</strong>
                 <p style="margin-top: 10px;"><strong>Name:</strong> ${name}</p>
                 <p><strong>Email:</strong> <a href="mailto:${email}" style="color: #667eea;">${email}</a></p>
               </div>
               <div class="info-card">
-                <strong>📋 Details</strong>
+                <strong>Details</strong>
                 <p style="margin-top: 10px;"><strong>Subject:</strong> ${subject}</p>
                 <p><strong>Contact ID:</strong> ${contactId}</p>
                 <p><strong>Received:</strong> ${new Date().toLocaleString()}</p>
@@ -234,19 +234,19 @@ const EmailTemplates = {
             </div>
 
             <div class="message-card">
-              <strong>💬 Message Content</strong>
+              <strong>Message Content</strong>
               <div style="margin-top: 15px; background: white; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0;">
                 ${message.replace(/\n/g, '<br>')}
               </div>
             </div>
 
             <div class="action-buttons">
-              <a href="mailto:${email}?subject=Re: ${subject}" class="btn btn-primary">📧 Reply via Email</a>
-              <a href="#" class="btn btn-secondary">👁️ Mark as Read</a>
+              <a href="mailto:${email}?subject=Re: ${subject}" class="btn btn-primary">Reply via Email</a>
+              <a href="#" class="btn btn-secondary"> Mark as Read</a>
             </div>
 
             <div style="background: #f0fff4; padding: 15px; border-radius: 8px; border-left: 4px solid #48bb78;">
-              <strong>📊 Quick Stats</strong>
+              <strong>Quick Stats</strong>
               <p style="margin-top: 8px; font-size: 0.9rem;">This is contact #42 this month • Average response time: 4.2 hours</p>
             </div>
           </div>
