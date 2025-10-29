@@ -25,6 +25,16 @@ class EmailService {
       maxMessages: 100
     };
 
+    // Verify SMTP TLS connection
+transporter.verify((error, success) => {
+  if (error) {
+    console.error("❌ SMTP connection failed:", error);
+  } else {
+    console.log("✅ SMTP server is ready to take messages via TLS");
+  }
+});
+
+
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
       this.transporter = nodemailer.createTransport(smtpConfig);
       
