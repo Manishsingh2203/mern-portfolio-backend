@@ -22,35 +22,22 @@ class EmailService {
       },
       pool: true,
       maxConnections: 5,
-      maxMessages: 100
+      maxMessages: 100,
+      tls: { rejectUnauthorized: false }
     };
 
-    // Verify SMTP TLS connection
-transporter.verify((error, success) => {
-  if (error) {
-    console.error("❌ SMTP connection failed:", error);
-  } else {
-    console.log("✅ SMTP server is ready to take messages via TLS");
-  }
-});
+    // Create transporter
+    this.transporter = nodemailer.createTransport(smtpConfig);
 
-
-    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-      this.transporter = nodemailer.createTransport(smtpConfig);
-      
-      // Verify connection
-      this.transporter.verify((error) => {
-        if (error) {
-          console.error('❌ Brevo SMTP connection failed:', error);
-          this.isConfigured = false;
-        } else {
-          this.isConfigured = true;
-          console.log(' ✅ Brevo email service configured successfully');
-        }
-      });
-    } else {
-      console.warn('⚠️ Brevo SMTP credentials not configured - email notifications disabled');
-    }
+    // Verify connection
+    this.transporter.verify((error, success) => {
+      if (error) {
+        console.error("❌ SMTP connection failed:", error);
+      } else {
+        this.isConfigured = true;
+        console.log("✅ SMTP server is ready to take messages via TLS");
+      }
+    });
   }
 
   async sendEmail(mailOptions) {
@@ -68,6 +55,7 @@ transporter.verify((error, success) => {
     }
   }
 }
+
 
 const emailService = new EmailService();
 
